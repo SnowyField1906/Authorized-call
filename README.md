@@ -147,8 +147,8 @@ access(auth) contract FooContract {
 
 // BarContract.cdc
 import FooContract from "FooContract" // Invalid
-import FooContract as auth from "FooContract" // Valid
 
+import FooContract as auth from "FooContract" // Valid
 FooContract._foo() // Invalid
 FooContract.foo() // Valid
 ```
@@ -174,11 +174,11 @@ access(auth) contract FooContract: FooInterface {
 
 // BarContract.cdc
 // Deployed at 0x01
-FooContract.foo() // pre-condition failed: Already joined
+auth FooContract.foo() // pre-condition failed: Already joined
 
 // AnotherBarContract.cdc
 // Deployed at 0x02
-FooContract.foo() // Valid
+auth FooContract.foo() // Valid
 ```
 
 ### Sample use cases
