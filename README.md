@@ -26,17 +26,13 @@ To illustrate the issue, let's consider a specific example. Suppose we have a `V
 ```cadence
 access(all) contract Vault {
     access(all) resource Admin {
-        access(all) fun swap(from: @FungibleToken.Vault): @FungibleToken.Vault {
-            return <- Vault._swap(from: <- from);
+        access(all) fun _swap(from: @FungibleToken.Vault, expectedAmount: UFix64): @FungibleToken.Vault {
+           return <- expected;
         }
     }
 
-    access(self) fun _swap(from: @FungibleToken.Vault): @FungibleToken.Vault {
-        // some implementation
-    }
-
-    access(account) fun createAdmin(): @Admin {
-        return <- create Vault.Admin();
+    init() {
+        self.account.save(<- Admin(), to: Vault.AdminPath);
     }
 }
 ```
@@ -47,8 +43,9 @@ Approach 1: Saving the `Admin` Resource to the `Plugin` deployer account.
 
 ```cadence
 access(all) contract Plugin {
-    access(all) fun swap(from: @FungibleToken.Vault): @FungibleToken.Vault {
-        return self.account.borrow<&Vault.Admin>(from: /storage/VaultAdmin)!.swap(from: <- from);
+    access(all) fun swap(from: @FungibleToken.Vault, expectedAmount: UFix64): @FungibleToken.Vault {
+        return self.account.borrow<&Vault.Admin>(from: Vault.AdminPath)!
+            .swap(from: <- from, expectedAmount: expectedAmount);
     }
 }
 ```
@@ -59,8 +56,8 @@ Approach 2: Saving the `Admin` Capability to the `Plugin` Contract.
 access(all) contract Plugin {
     let vaultAdmin: Capability<&Vault.Admin>;
 
-    access(all) fun swap(from: @FungibleToken.Vault): @FungibleToken.Vault {
-        return self.vaultAdmin.swap(from: <- from);
+    access(all) fun swap(from: @FungibleToken.Vault, expectedAmount: UFix64): @FungibleToken.Vault {
+        return self.vaultAdmin.swap(from: <- from, expectedAmount: expectedAmount);
     }
 
     init(vaultAdmin: Capability<&Vault.Admin>) {
@@ -74,10 +71,13 @@ However, both approaches have drawbacks:
 - The `Admin` Resource definition increases the code size and makes maintenance and updates more challenging.
 - Adding a new `Plugin` Contract requires operating with the `Vault` deployer account, reducing decentralization and introducing unnecessary steps.
 - As projects become larger and require more complex access control rules, the need for additional Resources meeting some specific requirements increases, which leads to a more significant increase in code size.
+- The deployer accounts will have a lot of unused Resources.
+- This is not work with Factory designs, because the changes to account only be done after transaction. If the deployed Contract sends some Capabilities or Resources to the Factory Contract, it cannot be accessed right away.
+- There are also other approaches like using `inbox` but also dealing with same issues.
 
 ## User Benefit
 
-This proposal is aimed at making Contracts more decentralized, independent of the deployer account. This will be easier to manage and friendly to high complexity projects.
+This proposal is aimed at making Contracts more decentralized, independent of the deployer account. This will be easier to manage and friendly to high complexity projects. Some powerful implementations will also be unlocked.
 
 ## Design Proposal
 
@@ -129,10 +129,11 @@ A contract can be marked as authorized, which needs to be imported with the `aut
 ```cadence
 // FooContract.cdc
 access(auth) contract FooContract {
-    access(self) fun _foo();
     access(all) fun foo();
 }
+```
 
+```cadence
 // BarContract.cdc
 import FooContract from "FooContract"; // Invalid, `auth` is missing
 
@@ -155,17 +156,23 @@ access(all) contract interface FooInterface {
         }
     }
 }
+```
 
+```cadence
 // FooContract.cdc
 access(auth) contract FooContract: FooInterface {
     access(all) let queue: [Addess] = [0x01];
     access(auth) fun foo();
 }
+```
 
+```cadence
 // BarContract.cdc
 // Deployed at 0x01
 auth FooContract.foo(); // pre-condition failed: Already joined
+```
 
+```cadence
 // AnotherBarContract.cdc
 // Deployed at 0x02
 auth FooContract.foo(); // Valid
@@ -186,7 +193,9 @@ transaction() {
         auth FooContract.foo(); // Valid, log: 0x01
     }
 }
+```
 
+```cadence
 // the Authorizer addresses are 0x01 and 0x02
 transaction() {
     prepare(auth1: AuthAccount, auth2: AuthAccount) {
@@ -194,6 +203,27 @@ transaction() {
         auth2 FooContract.foo(); // Valid, log: 0x02
         auth FooContract.foo(); // Invalid, `auth` is ambiguous
     }
+}
+```
+
+### Factory recommendation
+
+This proposal recommends the `auth` keyword in `init()` by default. This enables to determine the Factory Contract address in the `init` function.
+
+**Old**:
+
+```cadence
+init(router: Address) {
+    self.router = router;
+}
+
+```
+
+**New**:
+
+```cadence
+init() {
+    self.router = auth.address;
 }
 ```
 
@@ -217,11 +247,13 @@ In the below examples, we demonstrate how to restrict access to functions using 
 
 #### Example 1
 
-Supposes there is a dangerous function should not be called by itself or the deployer account.
+Supposes there is a dangerous function should be called only by itself or the deployer account.
 
 ```cadence
-access(auth) fun dangerousFoo() {
-    assert(auth.address != self.account.address, message: "Forbidden");
+access(auth) fun collectFee() {
+    pre {
+        auth.address == self.account.address: "Forbidden"
+    }
 }
 ```
 
@@ -232,11 +264,11 @@ Supposes we have a `Vault` Contract with a `Vault._swap()` function which should
 ```cadence
 // Vault.cdc
 access(all) contract Vault {
-    access(all) let approvedPlugins: [Address] = [0x01];
+    access(all) let approvedPlugins: [Address];
 
     access(auth) fun _swap(from: @FungibleToken.Vault, expectedAmount: UFix64) {
         pre {
-            self.approvedPlugins.contains(auth.address): "Not authorized"
+            self.approvedPlugins.contains(auth.address): "Forbidden"
         }
 
         return <- expected;
@@ -246,39 +278,45 @@ access(all) contract Vault {
 
 #### Example 3
 
-```cadence
-// Nodes.cdc
-access(all) contract Nodes {
-    access(all) let validExecutions: [Address] = [0x01];
-    access(all) let MINIMUM_STAKED: UFix64 = 1250000.0;
+Supposes we have a `SwapGOV` Contract which is a Factory, it can create `SwapPair` Contracts and collect fees from them in the future.
 
-    access(auth) fun executed() {
+```cadence
+// SwapGOV.cdc
+access(all) contract SwapGOV {
+    access(all) let pairs: [Address];
+
+    access(auth) fun createSwapPair() {
+        newAccount.contracts.add(
+            name: "SwapPair",
+            code: SwapPair.code
+        );
+
+        self.pairs.append(newAccount.address);
+    }
+
+    access(auth) fun collectAllFees() {
         pre {
-            self.validExecutions.contains(auth.address): "Not authorized"
-            auth.balance >= self.MINIMUM_STAKED: "Not staked enough"
+            auth.address == self.account.address: "Forbidden"
+        }
+
+        for pair in self.pairs {
+            auth pair.collectGOVFees();
         }
     }
 }
+```
 
-// InvalidExecution.cdc
-// Deployed at 0x02
-access(all) contract InvalidExecution: IExecution {
-    access(all) fun execute() {
-        auth Nodes.executed(); // -> assertion failed: Not authorized
+```cadence
+// SwapPair.cdc
+access(all) contract SwapPair {
+    access(auth) fun collectGOVFees() {
+        pre {
+            auth.address == self.gov: "Forbidden"
+        }
     }
-}
-// PoorExecution.cdc
-// Deployed at 0x01 and had less than 1.250.000 Flow
-access(all) contract PoorExecution: IExecution {
-    access(all) fun execute() {
-        auth Nodes.executed(); // -> assertion failed: Not staked enough
-    }
-}
-// ValidExecution.cdc
-// Deployed at 0x01 and had over 1.250.000 Flow
-access(all) contract ValidExecution: IExecution {
-    access(all) fun execute() {
-        auth Nodes.executed(); // Valid
+
+    init() {
+        self.gov = auth.address;
     }
 }
 ```
