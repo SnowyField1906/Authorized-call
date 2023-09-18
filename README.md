@@ -81,9 +81,11 @@ This proposal is aimed at making Contracts more decentralized, independent of th
 
 ## Design Proposal
 
-The proposed design introduces the following enhancements:
+The proposed design introduces the following enhancements
 
-### Upgradations to the `auth` and `access` keywords
+### Proposal Details
+
+#### Upgradations to the `auth` and `access` keywords
 
 This `auth` keyword existed in Cadence as a modifier for References to make it freely upcasted and downcasted. \
 But in this proposal, it is also combined with `access` to mark a function as private unless it is called with an `auth` prefix.
@@ -110,7 +112,7 @@ auth FooContract.foo(); // Valid, log: 0x01
 
 Once it is possible to access the caller Contract and utilize its functionalities, developers can build powerful features and implement complex logic to ensure Contract security besides enhance the flexibility and extensibility of Contracts.
 
-### Improvements to the `import` keyword
+#### Improvements to the `import` keyword
 
 With this prefix, we can import the whole Contract as authorized, which all calls to the Contract will be marked as `auth` without the prefix.
 
@@ -122,7 +124,7 @@ import FooContract as auth from "FooContract";
 FooContract.foo(); // Valid, log: 0x01
 ```
 
-### Transaction integration
+#### Transaction integration
 
 Not only supports the function to determine the caller Contract, but this proposal also can determine the caller Account (the Authorizer) in Transactions.
 
@@ -150,7 +152,7 @@ transaction() {
 }
 ```
 
-### Interface integration
+#### Interface integration
 
 This proposal also supports the `auth` keyword in Interfaces, which can be used to restrict access to the functions where its Contract implements those Interfaces.
 
@@ -187,7 +189,7 @@ auth FooContract.foo(); // pre-condition failed: Already joined
 auth FooContract.foo(); // Valid
 ```
 
-### Authorized Contracts
+#### Authorized Contracts
 
 A Contract can be marked as authorized, which needs to be imported with the `auth` prefix, otherwise, it will be completely inaccessible.
 
@@ -233,7 +235,7 @@ let fooReference: auth &FooInterface = auth getAccount(fooAddress).contracts
     .borrow<&FooInterface>(name: "FooContract")!; // Valid
 ```
 
-### Factory recommendation
+#### Factory recommendation
 
 This proposal recommends the `auth` keyword in `init()` by default. This enables to determine the Factory Contract address in the `init` function.
 
@@ -254,9 +256,17 @@ init() {
 }
 ```
 
+### Drawbacks
+
+I can't think of any drawbacks of this proposal yet.
+
 ### Alternatives Considered
 
 The keyword `auth` can be considered to be replaced with other keywords.
+
+### Performance Implications
+
+This proposal does is not any performance implications.
 
 ### Dependencies
 
@@ -347,6 +357,10 @@ access(all) contract SwapPair {
     }
 }
 ```
+
+### Compatibility
+
+As this is an additional improvement, it does not affect with anything.
 
 ## Prior Art
 
