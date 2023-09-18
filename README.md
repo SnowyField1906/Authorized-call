@@ -122,23 +122,32 @@ import FooContract as auth from "FooContract";
 FooContract.foo(); // Valid, log: 0x01
 ```
 
-### Authorized Contracts
+### Transaction integration
 
-A contract can be marked as authorized, which needs to be imported with the `auth` prefix, otherwise, it will be completely inaccessible.
+Not only supports the function to determine the caller Contract, but this proposal also can determine the caller Account (the Authorizer) in Transactions.
+
+Multiple authorizers may be specified in the Transaction.
+
+Due to basing on the Authorizer account, it can only be done in the `prepare` phase. And the `auth` keyword can be changed by the argument label.
 
 ```cadence
-// FooContract.cdc
-access(auth) contract FooContract {
-    access(all) fun foo();
+// the Authorizer address is 0x01
+transaction() {
+    prepare(auth: AuthAccount) {
+        auth FooContract.foo(); // Valid, log: 0x01
+    }
 }
 ```
 
 ```cadence
-// BarContract.cdc
-import FooContract from "FooContract"; // Invalid, `auth` is missing
-
-import FooContract as auth from "FooContract"; // Valid
-FooContract.foo(); // Valid
+// the Authorizer addresses are 0x01 and 0x02
+transaction() {
+    prepare(auth1: AuthAccount, auth2: AuthAccount) {
+        auth1 FooContract.foo(); // Valid, log: 0x01
+        auth2 FooContract.foo(); // Valid, log: 0x02
+        auth FooContract.foo(); // Invalid, `auth` is ambiguous
+    }
+}
 ```
 
 ### Interface integration
@@ -178,32 +187,23 @@ auth FooContract.foo(); // pre-condition failed: Already joined
 auth FooContract.foo(); // Valid
 ```
 
-### Transaction integration
+### Authorized Contracts
 
-Not only supports the function to determine the caller Contract, but this proposal also can determine the caller Account (the Authorizer) in Transactions.
-
-Multiple authorizers may be specified in the Transaction.
-
-Due to basing on the Authorizer account, it can only be done in the `prepare` phase. And the `auth` keyword can be changed by the argument label.
+A contract can be marked as authorized, which needs to be imported with the `auth` prefix, otherwise, it will be completely inaccessible.
 
 ```cadence
-// the Authorizer address is 0x01
-transaction() {
-    prepare(auth: AuthAccount) {
-        auth FooContract.foo(); // Valid, log: 0x01
-    }
+// FooContract.cdc
+access(auth) contract FooContract {
+    access(all) fun foo();
 }
 ```
 
 ```cadence
-// the Authorizer addresses are 0x01 and 0x02
-transaction() {
-    prepare(auth1: AuthAccount, auth2: AuthAccount) {
-        auth1 FooContract.foo(); // Valid, log: 0x01
-        auth2 FooContract.foo(); // Valid, log: 0x02
-        auth FooContract.foo(); // Invalid, `auth` is ambiguous
-    }
-}
+// BarContract.cdc
+import FooContract from "FooContract"; // Invalid, `auth` is missing
+
+import FooContract as auth from "FooContract"; // Valid
+FooContract.foo(); // Valid
 ```
 
 ### Factory recommendation
