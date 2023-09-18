@@ -206,6 +206,33 @@ import FooContract as auth from "FooContract"; // Valid
 FooContract.foo(); // Valid
 ```
 
+Applied to Interfaces:
+
+```cadence
+// FooInterface.cdc
+access(auth) contract interface FooInterface {
+    access(all) fun foo();
+}
+```
+
+```cadence
+// FooContract.cdc
+access(all) contract FooContract: FooInterface // Invalid, not compatible with FooInterface
+
+access(auth) contract FooContract: FooInterface {
+    access(all) fun foo();
+}
+```
+
+```cadence
+// BarContract.cdc
+let fooReference: &FooInterface = getAccount(fooAddress).contracts
+    .borrow<&FooInterface>(name: "FooContract")!; // Invalid, `auth` is missing
+
+let fooReference: auth &FooInterface = auth getAccount(fooAddress).contracts
+    .borrow<&FooInterface>(name: "FooContract")!; // Valid
+```
+
 ### Factory recommendation
 
 This proposal recommends the `auth` keyword in `init()` by default. This enables to determine the Factory Contract address in the `init` function.
