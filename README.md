@@ -16,7 +16,7 @@ This feature aims to enhance access control in Contracts, providing developers w
 
 ## Motivation
 
-Flow introduced Cadence - a Resource-Oriented Programming Language which works towards the Capability system, it replaced `msg.sender` and proved to be effective for small projects. \
+Flow introduced Cadence, a Resource-Oriented Programming Language which works towards the Capability system, it replaced `msg.sender` and proved to be effective for small projects. \
 However, as projects grow in size and complexity, the efficiency of the Capability system decreases compared to the use of `msg.sender`.
 
 Besides, The existing access control mechanisms is relatively simple, they have limitations when it comes to defining private functions that can only be accessed under specific circumstances. This can make it challenging for developers to enforce strict access control rules in complex projects.
@@ -152,7 +152,7 @@ transaction() {
 
 ### Interface integration
 
-This proposal also supports the `auth` keyword in Interfaces, which can be used to restrict access to the functions where its contract implements those Interfaces.
+This proposal also supports the `auth` keyword in Interfaces, which can be used to restrict access to the functions where its Contract implements those Interfaces.
 
 ```cadence
 // FooInterface.cdc
@@ -189,7 +189,7 @@ auth FooContract.foo(); // Valid
 
 ### Authorized Contracts
 
-A contract can be marked as authorized, which needs to be imported with the `auth` prefix, otherwise, it will be completely inaccessible.
+A Contract can be marked as authorized, which needs to be imported with the `auth` prefix, otherwise, it will be completely inaccessible.
 
 ```cadence
 // FooContract.cdc
@@ -206,7 +206,7 @@ import FooContract as auth from "FooContract"; // Valid
 FooContract.foo(); // Valid
 ```
 
-Applied to Interfaces:
+Applies to Interfaces:
 
 ```cadence
 // FooInterface.cdc
@@ -260,7 +260,7 @@ The keyword `auth` can be considered to be replaced with other keywords.
 
 ### Dependencies
 
-Actually, these are just functions having a hidden argument called `auth`, it is hidden to ensure that the caller cannot pass fake values to the function.
+Actually, these are just functions having a hidden argument called `auth`, it is hidden to ensure that the caller cannot pass a fake account to the function.
 
 When calling an `auth` function, the Contract address is passed internally into it.
 
@@ -305,7 +305,7 @@ access(all) contract Vault {
 
 #### Example 3
 
-Supposes we have a `SwapGOV` Contract which is a Factory, it can create `SwapPair` Contracts and collect fees from them in the future.
+Supposes we have a `SwapGOV` Contract which is a Factory Contract, it can create `SwapPair` Contracts and collect fees from them in the future.
 
 ```cadence
 // SwapGOV.cdc
