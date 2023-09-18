@@ -233,12 +233,12 @@ The keyword `auth` can be considered to be replaced with other keywords.
 
 ### Dependencies
 
-Actually, these are just functions having a hidden argument called `auth`, it is hidden to ensure that the caller cannot pass fake values to the function. \
+Actually, these are just functions having a hidden argument called `auth`, it is hidden to ensure that the caller cannot pass fake values to the function.
 
 When calling an `auth` function, the Contract address is passed internally into it.
 
 ```cadence
-access(auth) fun foo(/* auth: PublicAccount */); // auth is a hidden argument
+access(auth) fun foo( /auth: PublicAccount/ ); // auth is a hidden argument
 ```
 
 ### Tutorials and Examples
