@@ -90,7 +90,7 @@ But in this proposal, it is also combined with `access` to mark a function as pr
 
 Inside the function, the `auth` prefix can be used to access the caller Contract.
 
-```cadence:FooContract.cdc
+```cadence:
 // FooContract.cdc
 access(auth) fun foo() {
     log(auth.address); // The caller Contract address
