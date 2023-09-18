@@ -1,7 +1,7 @@
 ---
-status: draft 
+status: draft
 flip: 118
-authors: Huu Thuan Nguyen (nguyenhuuthuan25112003@gmail.com) 
+authors: Huu Thuan Nguyen (nguyenhuuthuan25112003@gmail.com)
 sponsor: None
 updated: 2023-06-30
 ---
@@ -35,7 +35,7 @@ access(all) contract Vault {
             return <- Vault._swap(from: <- from)
         }
     }
-    
+
     access(self) fun _swap(from: @FungibleToken.Vault): @FungibleToken.Vault {
         // some implementation
     }
@@ -90,7 +90,7 @@ This proposal is aimed at making Contracts more decentralized, independent of th
 
 > This is the meat of the document where you explain your proposal. If you have multiple alternatives, be sure to use sub-sections for better separation of the idea, and list pros/cons to each approach. If there are alternatives that you have eliminated, you should also list those here, and explain why you believe your chosen approach is superior.
 
-> Make sure you’ve thought through and addressed the following sections. If a  section is not relevant to your specific proposal, please explain why, e.g.  your FLIP addresses a convention or process, not an API.
+> Make sure you’ve thought through and addressed the following sections. If a section is not relevant to your specific proposal, please explain why, e.g. your FLIP addresses a convention or process, not an API.
 
 The proposed design introduces the following enhancements:
 
@@ -101,10 +101,10 @@ But in this proposal, it is also combined with `access` to mark a function as pr
 
 Inside the function, the `auth` prefix can be used to access the caller Contract.
 
-```cadence
+```cadence:FooContract.cdc
 // FooContract.cdc
 access(auth) fun foo() {
-    log(auth.account.address) // The caller Contract address
+    log(auth.address) // The caller Contract address
 }
 ```
 
@@ -133,7 +133,6 @@ import FooContract as auth from "FooContract"
 FooContract.foo() // Valid, log: 0x01
 ```
 
-
 ### Authorized Contracts
 
 A contract can be marked as authorized, which needs to be imported with the `auth` prefix, otherwise, it will be completely inaccessible.
@@ -161,7 +160,7 @@ access(all) contract interface FooInterface {
     access(all) let queue: [Addess]
     access(auth) fun foo() {
         pre {
-            self.queue[auth.account.address] == nil: "Already joined"
+            self.queue[auth.address] == nil: "Already joined"
         }
     }
 }
@@ -181,11 +180,49 @@ auth FooContract.foo() // pre-condition failed: Already joined
 auth FooContract.foo() // Valid
 ```
 
-### Sample use cases
+### Drawbacks
+
+> Why should this _not_ be done? What negative impact does it have?
+
+Since the [`entitlement` FLIP](https://github.com/onflow/flips/blob/main/cadence/20221214-auth-remodel.md) was approved, this might cause some confusion and conficts in syntax and semantics.
+
+### Alternatives Considered
+
+> Make sure to discuss the relative merits of alternatives to your proposal.
+
+The keyword `auth` can be considered to be replaced with other keywords.
+
+### Dependencies
+
+> Dependencies: does this proposal add any new dependencies to Flow?
+
+> Dependent projects: are there other areas of Flow or things that use Flow (Access API, Wallets, SDKs, etc.) that this affects? How have you identified these dependencies and are you sure they are complete? If there are dependencies, how are you managing those changes?
+
+Actually, these are just functions having a hidden parameter called `auth`, it is hidden to ensure that the caller cannot pass fake values to the function. \
+
+When calling an `auth` function, the Contract address is passed internally into it.
+
+```cadence
+access(auth) fun foo(/* auth: PublicAccount */); // auth is a hidden parameter
+```
+
+### Tutorials and Examples
+
+In the below examples, we demonstrate how to restrict access to functions using `auth` keywords.
 
 #### Example 1
 
-In this example, we demonstrate how to restrict access to functions using `auth` keywords.
+Supposes there is a dangerous should not call by the deployer account (or only the deployer account can call it).
+
+We can implement it as follows:
+
+```cadence
+access(auth) fun dangerousFoo() {
+    assert(auth.address == self.account.address, message: "Not authorized")
+}
+```
+
+#### Example 2
 
 Supposes we have a `Vault` Contract with a `Vault._swap()` function which should be restricted to be callable only by either `Plugin` or `Router` Contracts.
 
@@ -194,8 +231,8 @@ Supposes we have a `Vault` Contract with a `Vault._swap()` function which should
 access(all) contract Vault {
     access(all) let approvedContracts: [Address] = [0x01]
     access(auth) fun _swap(from: @FungibleToken.Vault, expectedAmount: UFix64): @FungibleToken.Vault {
-        assert(self.approvedContracts.contains(auth.account.address), message: "Not authorized")
-        
+        assert(self.approvedContracts.contains(auth.address), message: "Not authorized")
+
         let to: @FungibleToken = self._swap(
             from: <- from,
             expectedAmount: expectedAmount
@@ -238,15 +275,11 @@ access(all) contract Nodes {
     access(all) let validExecutions: [Address] = [0x01]
     access(all) let MINIMUM_STAKED: UFix64 = 1250000.0
 
-    access(Router | GOV) fun addExecution(execution: Address)
-    access(Collection | Consensus | Execution | Verification) fun withdrawn();
-
-    access(Execution) fun executed() {
-        let exeAddr: Address = Execution.account.address
-        assert(Nodes.validExecutions.exists(exeAddr), message: "Execution is not valid")
-
-        let balance: UFix64 = getAccount(Execution.account.address).balance
-        assert(balance >= Nodes.minimumStaked: "Execution is not staked enough")
+    access(auth) fun executed() {
+        pre {
+            self.validExecutions.exists(auth.address): "Execution is not valid"
+            auth.balance >= self.MINIMUM_STAKED: "Execution is not staked enough"
+        }
     }
 }
 
@@ -254,118 +287,24 @@ access(all) contract Nodes {
 // Deployed at 0x02
 access(all) contract InvalidExecution: IExecution {
     access(all) fun execute() {
-        Nodes.executed() // -> assertion failed: Execution is not valid
+        auth Nodes.executed() // -> assertion failed: Execution is not valid
     }
 }
 // PoorExecution.cdc
 // Deployed at 0x01 and had less than 1.250.000 Flow
 access(all) contract PoorExecution: IExecution {
     access(all) fun execute() {
-        Nodes.executed() // -> assertion failed: Execution is not staked enough
+        auth Nodes.executed() // -> assertion failed: Execution is not staked enough
     }
 }
 // ValidExecution.cdc
 // Deployed at 0x01 and had over 1.250.000 Flow
 access(all) contract ValidExecution: IExecution {
     access(all) fun execute() {
-        Nodes.executed() // Valid
+        auth Nodes.executed() // Valid
     }
 }
 ```
-
-#### Example 4
-
-```cadence
-// Bank.cdc
-define Balance from SpecialBalance { }
-define Receiver from SpecialReceiver { }
-define Provider from SpecialProvider { }
-
-group (Balance & Receiver & Provider) as Vault
-
-access(all) contract Bank {
-    access(Balance) fun getInterest(): UFix64;
-
-    access(Provider) fun withdrawAll();
-
-    access(Vault) fun subscribed()
-}
-
-// BankVault.cdc
-access(all) resource interface SpecialBalance {
-    access(all) fun getAvailableBalance(): UFix64;
-
-    access(all) fun getAllPossibleBalance(): UFix64 {
-        return self.getAvailableBalance() + Bank.getInterest() // Valid from SpecialBalance
-    }
-}
-access(all) resource interface SpecialProvider {
-    access(all) fun withdraw(amount: UFix64): @FungibleToken.Vault;
-
-    access(all) fun withdrawAll(): @FungibleToken.Vault {
-        Bank.withdrawAll() // Valid from Provider
-        // Some implementation
-    }
-}
-access(all) resource SpecialVault: SpecialBalance, SpecialReceiver, SpecialProvider {
-    // Some implementation
-
-    access(all) fun subscribe() {
-        Bank.subscribed() // Valid from (SpecialBalance & SpecialReceiver & SpecialProvider)
-    }
-}
-```
-
-### Drawbacks
-
->Why should this *not* be done? What negative impact does it have?
-
-Since the [`entitlement` FLIP](https://github.com/onflow/flips/blob/main/cadence/20221214-auth-remodel.md) was approved, this might cause some confusion and conficts in syntax and semantics.
-
-### Alternatives Considered
-
-> Make sure to discuss the relative merits of alternatives to your proposal.
-
-
-### Performance Implications
-
-> Do you expect any (speed / memory)? How will you confirm?
-
-> There should be microbenchmarks. Are there?
-
-> There should be end-to-end tests and benchmarks. If there are not (since this is still a design), how will you track that these will be created?
-
-### Dependencies
-
-> Dependencies: does this proposal add any new dependencies to Flow?
-
-> Dependent projects: are there other areas of Flow or things that use Flow  (Access API, Wallets, SDKs, etc.) that this affects? How have you identified these dependencies and are you sure they are complete?  If there are dependencies, how are you managing those changes?
-
-### Engineering Impact
-
-> Do you expect changes to binary size / build time / test times?
-
-> Who will maintain this code? Is this code in its own buildable unit? Can this code be tested in its own?  Is visibility suitably restricted to only a small API surface for others to use?
-
-### Best Practices
-
-> Does this proposal change best practices for some aspect of using/developing Flow? How will these changes be communicated/enforced?
-
-### Tutorials and Examples
-
-> If design changes existing API or creates new ones, the design owner should create end-to-end examples (ideally, a tutorial) which reflects how new feature will be used. Some things to consider related to the tutorial:
-> - It should show the usage of the new feature in an end to end example (i.e. from the browser to the execution node). Many new features have unexpected effects in parts far away from the place of change that can be found by running through an end-to-end example.
-> - This should be written as if it is documentation of the new feature, i.e., consumable by a user, not a Flow contributor.
-> - The code does not need to work (since the feature is not implemented yet) but the expectation is that the code does work before the feature can be merged.
-
-### Compatibility
-
-> Does the design conform to the backwards & forwards compatibility [requirements](../docs/compatibility.md)?
-
-> How will this proposal interact with other parts of the Flow Ecosystem?
-> - How will it work with FCL?
-> - How will it work with the Emulator?
-> - How will it work with existing Flow SDKs?
 
 ### User Impact
 
@@ -388,3 +327,7 @@ Since the [`entitlement` FLIP](https://github.com/onflow/flips/blob/main/cadence
 > Seed this with open questions you require feedback on from the FLIP process.
 
 > What parts of the design still need to be defined?
+
+```
+
+```
