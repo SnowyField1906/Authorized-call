@@ -1,12 +1,12 @@
 ---
 status: draft
-flip: 118
+flip: 198
 authors: Huu Thuan Nguyen (nguyenhuuthuan25112003@gmail.com)
 sponsor: None
-updated: 2023-06-30
+updated: 2023-09-18
 ---
 
-# FLIP 118: Authorized Call
+# FLIP 198: Authorized Call
 
 ## Objective
 
@@ -21,7 +21,7 @@ However, as projects grow in size and complexity, the efficiency of the Capabili
 
 Besides, The existing access control mechanisms is relatively simple, they have limitations when it comes to defining private functions that can only be accessed under specific circumstances. This can make it challenging for developers to enforce strict access control rules in complex projects.
 
-To illustrate the issue, let's consider a specific example. Suppose we have a `Vault` Contract with a function called `Vault.swap()`, which should only be called by the `Core` Contract or `Router` Contracts.
+To illustrate the issue, let's consider a specific example. Suppose we have a `Vault` Contract with a function called `Vault.swap()`, which should only be called by the `Plugin` Contracts.
 
 ```cadence
 access(all) contract Vault {
@@ -43,20 +43,20 @@ access(all) contract Vault {
 
 Currently, we can achieve this with Flow using different approaches:
 
-Approach 1: Saving the `Admin` Resource to the `Router` deployer account.
+Approach 1: Saving the `Admin` Resource to the `Plugin` deployer account.
 
 ```cadence
-access(all) contract Router {
+access(all) contract Plugin {
     access(all) fun swap(from: @FungibleToken.Vault): @FungibleToken.Vault {
         return self.account.borrow<&Vault.Admin>(from: /storage/VaultAdmin)!.swap(from: <- from);
     }
 }
 ```
 
-Approach 2: Saving the `Admin` Capability to the `Router` Contract.
+Approach 2: Saving the `Admin` Capability to the `Plugin` Contract.
 
 ```cadence
-access(all) contract Router {
+access(all) contract Plugin {
     let vaultAdmin: Capability<&Vault.Admin>;
 
     access(all) fun swap(from: @FungibleToken.Vault): @FungibleToken.Vault {
@@ -72,7 +72,7 @@ access(all) contract Router {
 However, both approaches have drawbacks:
 
 - The `Admin` Resource definition increases the code size and makes maintenance and updates more challenging.
-- Adding a new `Router` Contract requires operating with the `Vault` deployer account, reducing decentralization and introducing unnecessary steps.
+- Adding a new `Plugin` Contract requires operating with the `Vault` deployer account, reducing decentralization and introducing unnecessary steps.
 - As projects become larger and require more complex access control rules, the need for additional Resources meeting some specific requirements increases, which leads to a more significant increase in code size.
 
 ## User Benefit
@@ -90,7 +90,7 @@ But in this proposal, it is also combined with `access` to mark a function as pr
 
 Inside the function, the `auth` prefix can be used to access the caller Contract.
 
-```cadence:
+```cadence
 // FooContract.cdc
 access(auth) fun foo() {
     log(auth.address); // The caller Contract address
@@ -129,8 +129,8 @@ A contract can be marked as authorized, which needs to be imported with the `aut
 ```cadence
 // FooContract.cdc
 access(auth) contract FooContract {
-    access(self) fun _foo() { }
-    access(all) fun foo() { }
+    access(self) fun _foo();
+    access(all) fun foo();
 }
 
 // BarContract.cdc
